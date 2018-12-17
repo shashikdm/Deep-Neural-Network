@@ -35,7 +35,7 @@ class DNN:
             if i%100 == 0 and (self.show_cost or self.plot_cost):#pring every 100th value
                 self.costs.append(self.compute_cost(self.activations[self.layers], self.y_train))
                 if self.show_cost:
-                    print("cost:", self.costs[-1])
+                    print("cost @", i,":", self.costs[-1])
             self.backward_prop()
         if self.plot_cost:#Plot
             plt.plot(np.squeeze(self.costs))
@@ -67,9 +67,26 @@ class DNN:
             self.activations.append(A)
     def backward_prop(self):
         AL = self.activations[self.layers]
+        A = self.activations[self.layers-1]
+        Z = self.linears[self.layers-1]
         #starting with derivative of cross entropy cost function for binary classification
-        dLdA = -(np.divide(self.y_train,AL)-np.divide(1-self.y_train,1-AL))/self.y_train.shape[1] 
-        for i in reversed(range(0, self.layers)):
+        if self.activation_output == "sigmoid":
+            dLdA = -(np.divide(self.y_train,AL)-np.divide(1-self.y_train,1-AL))/self.y_train.shape[1] 
+            dAdZ = self.dsigmoid(Z)
+            dLdZ = dLdA*dAdZ
+            dLdW = np.dot((dLdZ),A.T)/self.y_train.shape[1]  #A = dZdW
+            dLdb = np.sum(dLdZ, axis = 1, keepdims = True)/self.y_train.shape[1] 
+            self.weights[self.layers-1] = self.weights[self.layers-1] - self.learning_rate*dLdW
+            self.biases[self.layers-1] = self.biases[self.layers-1] - self.learning_rate*dLdb
+            dLdA = np.dot(self.weights[self.layers-1].T,dLdA*dAdZ)
+        elif self.activation_output == "softmax":
+            dLdZ = (AL - self.y_train)
+            dLdW = np.dot(dLdZ,A.T)/self.y_train.shape[1] #A = dZdW
+            dLdb = np.sum(dLdZ, axis = 1, keepdims = True)/self.y_train.shape[1]
+            self.weights[self.layers-1] = self.weights[self.layers-1] - self.learning_rate*dLdW
+            self.biases[self.layers-1] = self.biases[self.layers-1] - self.learning_rate*dLdb
+            dLdA = np.dot(self.weights[self.layers-1].T,dLdZ)
+        for i in reversed(range(0, self.layers-1)):
             Z = self.linears[i]
             A = self.activations[i]
             if i < self.layers-1 and self.activation_hidden == "relu":
@@ -77,12 +94,6 @@ class DNN:
             elif i < self.layers-1 and self.activation_hidden == "sigmoid":
                 dAdZ = self.dsigmoid(Z)
             elif i < self.layers-1 and self.activation_hidden == "softmax":
-                dAdZ = self.dsoftmax(Z)
-            elif i == self.layers-1 and self.activation_output == "relu":
-                dAdZ = self.drelu(Z)
-            elif i == self.layers-1 and self.activation_output == "sigmoid":
-                dAdZ = self.dsigmoid(Z)
-            elif i == self.layers-1 and self.activation_output == "softmax":
                 dAdZ = self.dsoftmax(Z)
             dLdW = np.dot((dLdA*dAdZ),A.T) #A = dZdW
             dLdb = np.sum(dLdA*dAdZ, axis = 1, keepdims = True)
@@ -93,8 +104,9 @@ class DNN:
     def relu(self, z):#Helper function relu #tested ok
         return np.maximum(0,z)
     def drelu(self, z):#Helper function derivative of relu #tested ok
-        z = np.divide(z,np.absolute(z))
-        return np.maximum(0,z)/np.absolute(z)
+        z[z<=0] = 0
+        z[z>0] = 1
+        return z
     
     def sigmoid(self, z):#Helper function sigmoid #tested ok
         return 1/(1+np.exp(-z))
@@ -102,26 +114,20 @@ class DNN:
         return self.sigmoid(z)*(1-self.sigmoid(z))
     
     def softmax(self, z):#helper function softmax #doubtful
+        z = z - np.max(z)
         return np.exp(z)/np.sum(np.exp(z), axis = 0, keepdims = True)
+
     def dsoftmax(self, z):#helper function forderivative of softmax #doubtful
         return self.softmax(z)*(1-self.softmax(z))
     
     def compute_cost(self, AL, y):#Helper function cross entropy cost
         #cross entropy loss function for binary classification
-        return -np.sum(np.dot(y,np.log(AL).T)+np.dot((1-y),np.log(1-AL).T))/y.shape[1]
+        return -np.sum(np.dot(y.T,np.log(AL)))/y.shape[1]
     def predict(self, X_test):#returns probs and predictions
         self.forward_prop(X_test)
         probabilities = np.array(self.activations[self.layers],ndmin = 2)
-        if self.neurons[-1] == 1:#if binary classification
-            predictions = np.zeros((1,X_test.shape[1]))
-            for i in range(0,X_test.shape[1]):
-                if probabilities[0,i] >= 0.5:
-                    predictions[0,i] = 1
-                else:
-                    predictions[0,i] = 0
-        else:#if multiclass classification, chooses maximum
-            predictions = np.zeros((self.neurons[-1],X_test.shape[1]))
-            for i in range(0,X_test.shape[1]):
-                predictions[np.argmax(probabilities[...,i])] = 1
+        predictions = np.zeros((self.neurons[-1],X_test.shape[1]))
+        for i in range(0,X_test.shape[1]):
+            predictions[np.argmax(probabilities[...,i]),i] = 1
         return probabilities, predictions
         
