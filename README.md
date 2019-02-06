@@ -16,6 +16,6 @@ It uses [random projections](https://en.wikipedia.org/wiki/Random_projection) an
 | Dataset       |Number of hidden nodes | Accuracy      |
 |:-------------:|:---------------------:|:-------------:|
 | Training      | 1000                  |  94%          |
-| Testing       | 1000                  |  94%          |
+| Validation    | 1000                  |  94%          |
 | Training      | 10000                 |  98%          |
-| Testing       | 10000                 |  98%          |
+| Validation    | 10000                 |  98%          |
